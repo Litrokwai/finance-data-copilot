@@ -1,0 +1,3 @@
+-- V1 no longer seeds virtual/demo metadata.
+-- Company metadata should be synchronized from the read-only SQL Server ai_platform catalog:
+--   scripts/sync_howgow_metadata.py

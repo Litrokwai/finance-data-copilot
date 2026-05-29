@@ -1,0 +1,38 @@
+body {
+  margin: 0;
+  background: #f5f7fa;
+  color: #1f2933;
+  font-family: "Segoe UI", "Microsoft YaHei", "PingFang SC", Arial, sans-serif;
+}
+
+pre {
+  border-radius: 6px;
+  white-space: pre-wrap;
+}
+
+.ant-card {
+  border-radius: 6px;
+}
+
+.metadata-matrix-chart {
+  height: 520px;
+  width: 100%;
+}
+
+.lineage-graph-chart {
+  height: 560px;
+  width: 100%;
+}
+
+.metadata-chart-tooltip {
+  max-width: 420px;
+  color: #334155;
+  font-family: "Segoe UI", "Microsoft YaHei", "PingFang SC", Arial, sans-serif;
+  line-height: 1.7;
+}
+
+.metadata-chart-tooltip-title {
+  color: #102a43;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
