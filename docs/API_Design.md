@@ -74,4 +74,4 @@
 
 `parse_status` 当前支持 `SUCCESS` 和 `REVIEW`。结构化血缘边包括 `READ`、`WRITE` 和 `TABLE_FLOW` 三类。`READ/WRITE` 表示过程与表的关系，`TABLE_FLOW` 表示同一语句中由读取对象推导到写入对象的表间链路。动态 SQL 会将过程标记为 `REVIEW`，结果需要人工复核；详情接口会返回复核原因和语句片段，用于人工判断。表影响分析只读取已同步的本地血缘缓存，并会过滤明显的 SQL 别名噪声；同一表名的大小写差异会按大小写不敏感规则合并，读取过程和写入过程按存储过程去重统计。
 
-血缘复核工作台的 `target_type` 当前支持 `PROCEDURE` 和 `EDGE`，`review_status` 支持 `PENDING`、`CONFIRMED`、`NEEDS_FIX` 和 `IGNORED`。V1 候选范围包括 `procedure_lineage_record.parse_status = REVIEW` 的过程，以及置信度小于等于阈值的 `READ/WRITE` 结构化边；`TABLE_FLOW` 属于推导链路，暂不进入默认复核候选，避免候选量过大。复核接口只写入本地 PostgreSQL 复核记录，不连接公司业务库，也不执行任何 SQL 或存储过程。
+血缘复核工作台的 `target_type` 当前支持 `PROCEDURE` 和 `EDGE`，`review_status` 支持 `PENDING`、`CONFIRMED`、`NEEDS_FIX` 和 `IGNORED`。V1 候选范围包括 `procedure_lineage_record.parse_status = REVIEW` 的过程，以及置信度小于等于阈值的 `READ/WRITE` 结构化边；`TABLE_FLOW` 属于推导链路，暂不进入默认复核候选，避免候选量过大。复核统计只统计当前仍然有效的候选项，历史上已不存在或不再满足候选条件的复核记录不会进入统计；复核状态写入前也会校验目标是否仍在当前候选范围内。复核接口只写入本地 PostgreSQL 复核记录，不连接公司业务库，也不执行任何 SQL 或存储过程。

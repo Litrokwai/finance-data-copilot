@@ -399,12 +399,6 @@ def get_table_impact(db: Session, table_name: str) -> dict:
 
 
 def get_lineage_review_summary(db: Session, confidence_threshold: float = DEFAULT_LOW_CONFIDENCE_THRESHOLD) -> dict:
-    status_counts = {
-        status: count
-        for status, count in db.query(LineageReviewRecord.review_status, func.count(LineageReviewRecord.id))
-        .group_by(LineageReviewRecord.review_status)
-        .all()
-    }
     procedure_review_count = (
         db.query(func.count(ProcedureLineageRecord.id))
         .filter(ProcedureLineageRecord.parse_status == "REVIEW")
@@ -418,6 +412,7 @@ def get_lineage_review_summary(db: Session, confidence_threshold: float = DEFAUL
         or 0
     )
     total_candidates = procedure_review_count + low_confidence_edge_count
+    status_counts = _current_review_status_counts(db, confidence_threshold)
     handled_count = (
         (status_counts.get("CONFIRMED") or 0)
         + (status_counts.get("NEEDS_FIX") or 0)
@@ -476,6 +471,8 @@ def update_lineage_review_item(
         raise ValueError("target_type must be PROCEDURE or EDGE")
     if normalized_status not in REVIEW_STATUSES:
         raise ValueError("review_status must be PENDING, CONFIRMED, NEEDS_FIX or IGNORED")
+    if not _review_target_exists(db, normalized_target_type, target_id):
+        raise ValueError("review target is not in current lineage review candidates")
 
     record = (
         db.query(LineageReviewRecord)
@@ -641,6 +638,51 @@ def _procedure_refs(edges: list[ProcedureLineageEdge]) -> list[dict]:
 def _review_record_map(db: Session) -> dict[tuple[str, int], LineageReviewRecord]:
     records = db.query(LineageReviewRecord).all()
     return {(record.target_type, record.target_id): record for record in records}
+
+
+def _current_review_status_counts(db: Session, confidence_threshold: float) -> dict[str, int]:
+    procedure_candidate_ids = (
+        db.query(ProcedureLineageRecord.id).filter(ProcedureLineageRecord.parse_status == "REVIEW").subquery()
+    )
+    edge_candidate_ids = (
+        db.query(ProcedureLineageEdge.id).filter(_low_confidence_edge_filter(confidence_threshold)).subquery()
+    )
+    rows = (
+        db.query(LineageReviewRecord.review_status, func.count(LineageReviewRecord.id))
+        .filter(
+            or_(
+                and_(
+                    LineageReviewRecord.target_type == "PROCEDURE",
+                    LineageReviewRecord.target_id.in_(db.query(procedure_candidate_ids.c.id)),
+                ),
+                and_(
+                    LineageReviewRecord.target_type == "EDGE",
+                    LineageReviewRecord.target_id.in_(db.query(edge_candidate_ids.c.id)),
+                ),
+            )
+        )
+        .group_by(LineageReviewRecord.review_status)
+        .all()
+    )
+    return {status: count for status, count in rows}
+
+
+def _review_target_exists(db: Session, target_type: str, target_id: int) -> bool:
+    if target_type == "PROCEDURE":
+        return (
+            db.query(ProcedureLineageRecord.id)
+            .filter(ProcedureLineageRecord.id == target_id, ProcedureLineageRecord.parse_status == "REVIEW")
+            .first()
+            is not None
+        )
+    if target_type == "EDGE":
+        return (
+            db.query(ProcedureLineageEdge.id)
+            .filter(ProcedureLineageEdge.id == target_id, _low_confidence_edge_filter(DEFAULT_LOW_CONFIDENCE_THRESHOLD))
+            .first()
+            is not None
+        )
+    return False
 
 
 def _procedure_review_candidates(
