@@ -119,6 +119,8 @@ export interface MetadataQualityTableItem {
   issue_tags: string[];
   lifecycle_hint: string;
   lifecycle_reasons: string[];
+  source_collected_at?: string;
+  latest_creat_tm?: string;
   updated_at?: string;
 }
 

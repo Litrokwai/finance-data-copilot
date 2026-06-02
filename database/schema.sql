@@ -32,6 +32,8 @@ CREATE TABLE IF NOT EXISTS metadata_table (
     business_domain VARCHAR(100),
     owner VARCHAR(100),
     update_frequency VARCHAR(50),
+    source_collected_at TIMESTAMPTZ,
+    latest_creat_tm TIMESTAMPTZ,
     is_valid BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()

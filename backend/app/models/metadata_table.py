@@ -13,6 +13,8 @@ class MetadataTable(Base):
     business_domain: Mapped[str | None] = mapped_column(String(100), index=True)
     owner: Mapped[str | None] = mapped_column(String(100))
     update_frequency: Mapped[str | None] = mapped_column(String(50))
+    source_collected_at = mapped_column(DateTime(timezone=True))
+    latest_creat_tm = mapped_column(DateTime(timezone=True))
     is_valid: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

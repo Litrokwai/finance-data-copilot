@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+
 from sqlalchemy import String, case, cast, func, or_
 from sqlalchemy.orm import Session
 
@@ -11,6 +13,7 @@ from app.models.procedure_lineage_edge import ProcedureLineageEdge
 
 UNKNOWN_DOMAIN = "未分类"
 UNCLASSIFIED_DOMAINS = {"", UNKNOWN_DOMAIN, "好股库未分类"}
+STALE_SOURCE_DAYS = 730
 TEST_OR_TEMP_TABLE_TOKENS = (
     "test",
     "tmp",
@@ -388,6 +391,8 @@ def _build_quality_table_item(table: MetadataTable, columns: list[MetadataColumn
         issue_tags.append("字段类型异常")
     if lifecycle_hint == "SUSPECTED_TEST_OR_TEMP":
         issue_tags.append("疑似测试临时")
+    if lifecycle_hint == "SUSPECTED_STALE":
+        issue_tags.append("疑似长期未更新")
     if lifecycle_hint == "SUSPECTED_UNUSED":
         issue_tags.append("疑似遗留无用")
     if lifecycle_hint == "ACTIVE_UNCLASSIFIED":
@@ -426,6 +431,8 @@ def _build_quality_table_item(table: MetadataTable, columns: list[MetadataColumn
         "issue_tags": issue_tags,
         "lifecycle_hint": lifecycle_hint,
         "lifecycle_reasons": lifecycle_reasons,
+        "source_collected_at": table.source_collected_at,
+        "latest_creat_tm": table.latest_creat_tm,
         "updated_at": table.updated_at,
     }
 
@@ -439,6 +446,10 @@ def _build_unclassified_diagnostics(items: list[dict]) -> list[dict]:
         "SUSPECTED_TEST_OR_TEMP": {
             "diagnostic_name": "疑似测试或临时表",
             "description": "表名包含 test、tmp、temp、bak、delete、old 等信号，需确认是否应下线或排除。",
+        },
+        "SUSPECTED_STALE": {
+            "diagnostic_name": "疑似长期未更新",
+            "description": "未分类、无血缘引用，且源端 latest_creat_tm 距今超过两年，可优先排除或降级。",
         },
         "SUSPECTED_UNUSED": {
             "diagnostic_name": "疑似遗留无用表",
@@ -492,7 +503,16 @@ def _diagnose_table_lifecycle(
         reasons.append("表名命中测试、临时、备份、删除或历史遗留命名信号。")
         if lineage_ref_count == 0:
             reasons.append("当前血缘中没有读写引用。")
+        if table.latest_creat_tm:
+            reasons.append(f"源端最近创建时间信号为 {table.latest_creat_tm.date()}。")
         return "SUSPECTED_TEST_OR_TEMP", reasons
+
+    if is_unclassified and lineage_ref_count == 0 and _is_source_time_stale(table.latest_creat_tm):
+        reasons.append("当前血缘中没有读写引用。")
+        reasons.append(f"源端最近创建时间信号为 {table.latest_creat_tm.date()}，距今超过 {STALE_SOURCE_DAYS} 天。")
+        if not _has_text(table.table_comment):
+            reasons.append("缺少表中文名。")
+        return "SUSPECTED_STALE", reasons
 
     if is_unclassified and lineage_ref_count == 0 and not _has_text(table.table_comment) and primary_key_count == 0:
         reasons.append("当前血缘中没有读写引用。")
@@ -569,6 +589,14 @@ def _is_type_anomaly(data_type: str | None) -> bool:
 def _looks_like_test_or_temp_table(table_name: str) -> bool:
     short_name = _table_quality_key(table_name)
     return any(token in short_name for token in TEST_OR_TEMP_TABLE_TOKENS)
+
+
+def _is_source_time_stale(value: datetime | None) -> bool:
+    if value is None:
+        return False
+    current = datetime.now(timezone.utc)
+    normalized = value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    return normalized < current - timedelta(days=STALE_SOURCE_DAYS)
 
 
 def _ratio(numerator: int, denominator: int) -> float:

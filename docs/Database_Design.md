@@ -31,6 +31,8 @@
 | business_domain | 业务域 |
 | owner | 负责人 |
 | update_frequency | 更新频率 |
+| source_collected_at | 源端元数据采集时间，来自 `catalog_tables.collected_at` |
+| latest_creat_tm | 源端最近创建时间信号，来自 `catalog_tables.latest_creat_tm` |
 | is_valid | 是否有效 |
 | created_at | 创建时间 |
 | updated_at | 更新时间 |
@@ -44,6 +46,10 @@
 | business_domain | business_domain |
 | owner | owner |
 | refresh_frequency | update_frequency |
+| collected_at | source_collected_at |
+| latest_creat_tm | latest_creat_tm |
+
+`created_at` 和 `updated_at` 是本项目 PostgreSQL 记录时间，不代表公司业务表真实创建或更新时间。判断表是否疑似长期未更新时，应优先使用源端同步来的 `latest_creat_tm`，并结合血缘引用、表名命名模式、表中文名和主键信息综合判断。
 
 ## metadata_column
 

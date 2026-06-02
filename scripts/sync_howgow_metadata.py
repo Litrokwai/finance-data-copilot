@@ -229,14 +229,17 @@ def sync_to_postgres(app_dsn: str, tables: list[dict], columns: list[dict], metr
                 cur.execute(
                     """
                     insert into metadata_table (
-                        table_name, table_comment, business_domain, owner, update_frequency, is_valid
+                        table_name, table_comment, business_domain, owner, update_frequency,
+                        source_collected_at, latest_creat_tm, is_valid
                     )
-                    values (%s, %s, %s, %s, %s, %s)
+                    values (%s, %s, %s, %s, %s, %s, %s, %s)
                     on conflict (table_name) do update set
                         table_comment = excluded.table_comment,
                         business_domain = excluded.business_domain,
                         owner = excluded.owner,
                         update_frequency = excluded.update_frequency,
+                        source_collected_at = excluded.source_collected_at,
+                        latest_creat_tm = excluded.latest_creat_tm,
                         is_valid = excluded.is_valid,
                         updated_at = now()
                     """,
@@ -246,6 +249,8 @@ def sync_to_postgres(app_dsn: str, tables: list[dict], columns: list[dict], metr
                         business_domain,
                         owner[:100],
                         clean_text(item.get("refresh_frequency")),
+                        item.get("collected_at"),
+                        item.get("latest_creat_tm"),
                         is_valid_table,
                     ),
                 )

@@ -30,6 +30,7 @@ function validityTag(isValid: boolean) {
 function issueTag(tag: string) {
   if (tag === "待治理分类") return <Tag color="gold">{tag}</Tag>;
   if (tag === "疑似测试临时") return <Tag color="purple">{tag}</Tag>;
+  if (tag === "疑似长期未更新") return <Tag color="orange">{tag}</Tag>;
   if (tag === "疑似遗留无用") return <Tag color="default">{tag}</Tag>;
   if (tag === "仍被引用") return <Tag color="green">{tag}</Tag>;
   if (tag === "缺主键" || tag === "字段类型异常") return <Tag color="red">{tag}</Tag>;
@@ -40,10 +41,16 @@ function issueTag(tag: string) {
 function lifecycleTag(value: string) {
   if (value === "ACTIVE_UNCLASSIFIED") return <Tag color="green">仍被引用</Tag>;
   if (value === "SUSPECTED_TEST_OR_TEMP") return <Tag color="purple">疑似测试临时</Tag>;
+  if (value === "SUSPECTED_STALE") return <Tag color="orange">长期未更新</Tag>;
   if (value === "SUSPECTED_UNUSED") return <Tag>疑似遗留无用</Tag>;
   if (value === "NEEDS_CLASSIFICATION") return <Tag color="gold">待补分类</Tag>;
   if (value === "OFFLINE") return <Tag>已下线</Tag>;
   return <Tag color="blue">正常分类</Tag>;
+}
+
+function formatDate(value?: string) {
+  if (!value) return "-";
+  return value.slice(0, 10);
 }
 
 export default function MetadataQuality() {
@@ -95,6 +102,7 @@ export default function MetadataQuality() {
     { title: "业务域", dataIndex: "business_domain", width: 160, ellipsis: true, render: (value?: string) => value || "-" },
     { title: "诊断", dataIndex: "lifecycle_hint", width: 120, render: lifecycleTag },
     { title: "状态", dataIndex: "is_valid", width: 84, render: validityTag },
+    { title: "源端最近创建", dataIndex: "latest_creat_tm", width: 120, render: formatDate },
     { title: "字段", dataIndex: "column_count", width: 80, sorter: (a, b) => a.column_count - b.column_count },
     { title: "主键", dataIndex: "primary_key_count", width: 80, sorter: (a, b) => a.primary_key_count - b.primary_key_count },
     {
@@ -213,7 +221,7 @@ export default function MetadataQuality() {
           dataSource={data?.top_issue_tables || []}
           columns={tableColumns}
           pagination={{ pageSize: 12 }}
-          scroll={{ x: 1560 }}
+          scroll={{ x: 1680 }}
         />
       </Card>
     </Space>

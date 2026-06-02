@@ -114,6 +114,8 @@ class MetadataQualityTableItem(BaseModel):
     issue_tags: list[str]
     lifecycle_hint: str
     lifecycle_reasons: list[str]
+    source_collected_at: datetime | None = None
+    latest_creat_tm: datetime | None = None
     updated_at: datetime | None = None
 
 
