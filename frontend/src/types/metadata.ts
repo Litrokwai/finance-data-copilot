@@ -107,6 +107,7 @@ export interface MetadataQualityTableItem {
   table_name: string;
   table_comment?: string;
   business_domain?: string;
+  update_frequency?: string;
   is_valid: boolean;
   column_count: number;
   primary_key_count: number;
@@ -116,6 +117,16 @@ export interface MetadataQualityTableItem {
   lineage_ref_count: number;
   quality_score: number;
   issue_tags: string[];
+  lifecycle_hint: string;
+  lifecycle_reasons: string[];
+  updated_at?: string;
+}
+
+export interface MetadataUnclassifiedDiagnosticStat {
+  diagnostic_code: string;
+  diagnostic_name: string;
+  count: number;
+  description: string;
 }
 
 export interface MetadataQualitySummary {
@@ -136,6 +147,7 @@ export interface MetadataQualitySummary {
   column_comment_coverage: number;
   primary_key_coverage: number;
   issue_stats: MetadataQualityIssueStat[];
+  unclassified_diagnostics: MetadataUnclassifiedDiagnosticStat[];
   domain_quality: MetadataQualityDomainStat[];
   top_issue_tables: MetadataQualityTableItem[];
 }

@@ -10,7 +10,12 @@ import { Card, Col, Progress, Row, Space, Statistic, Table, Tag, Typography } fr
 import type { ColumnsType } from "antd/es/table";
 import { useQuery } from "@tanstack/react-query";
 import { getMetadataQuality } from "../api/metadata";
-import type { MetadataQualityDomainStat, MetadataQualityIssueStat, MetadataQualityTableItem } from "../types/metadata";
+import type {
+  MetadataQualityDomainStat,
+  MetadataQualityIssueStat,
+  MetadataQualityTableItem,
+  MetadataUnclassifiedDiagnosticStat
+} from "../types/metadata";
 
 function scoreColor(score: number) {
   if (score >= 85) return "#389e0d";
@@ -24,9 +29,21 @@ function validityTag(isValid: boolean) {
 
 function issueTag(tag: string) {
   if (tag === "待治理分类") return <Tag color="gold">{tag}</Tag>;
+  if (tag === "疑似测试临时") return <Tag color="purple">{tag}</Tag>;
+  if (tag === "疑似遗留无用") return <Tag color="default">{tag}</Tag>;
+  if (tag === "仍被引用") return <Tag color="green">{tag}</Tag>;
   if (tag === "缺主键" || tag === "字段类型异常") return <Tag color="red">{tag}</Tag>;
   if (tag === "下线表") return <Tag>{tag}</Tag>;
   return <Tag color="blue">{tag}</Tag>;
+}
+
+function lifecycleTag(value: string) {
+  if (value === "ACTIVE_UNCLASSIFIED") return <Tag color="green">仍被引用</Tag>;
+  if (value === "SUSPECTED_TEST_OR_TEMP") return <Tag color="purple">疑似测试临时</Tag>;
+  if (value === "SUSPECTED_UNUSED") return <Tag>疑似遗留无用</Tag>;
+  if (value === "NEEDS_CLASSIFICATION") return <Tag color="gold">待补分类</Tag>;
+  if (value === "OFFLINE") return <Tag>已下线</Tag>;
+  return <Tag color="blue">正常分类</Tag>;
 }
 
 export default function MetadataQuality() {
@@ -61,6 +78,12 @@ export default function MetadataQuality() {
     }
   ];
 
+  const diagnosticColumns: ColumnsType<MetadataUnclassifiedDiagnosticStat> = [
+    { title: "诊断", dataIndex: "diagnostic_name", width: 150 },
+    { title: "数量", dataIndex: "count", width: 90, sorter: (a, b) => a.count - b.count },
+    { title: "说明", dataIndex: "description", ellipsis: true }
+  ];
+
   const tableColumns: ColumnsType<MetadataQualityTableItem> = [
     {
       title: "表名",
@@ -70,6 +93,7 @@ export default function MetadataQuality() {
     },
     { title: "中文名称", dataIndex: "table_comment", width: 180, ellipsis: true, render: (value?: string) => value || "-" },
     { title: "业务域", dataIndex: "business_domain", width: 160, ellipsis: true, render: (value?: string) => value || "-" },
+    { title: "诊断", dataIndex: "lifecycle_hint", width: 120, render: lifecycleTag },
     { title: "状态", dataIndex: "is_valid", width: 84, render: validityTag },
     { title: "字段", dataIndex: "column_count", width: 80, sorter: (a, b) => a.column_count - b.column_count },
     { title: "主键", dataIndex: "primary_key_count", width: 80, sorter: (a, b) => a.primary_key_count - b.primary_key_count },
@@ -90,6 +114,12 @@ export default function MetadataQuality() {
       title: "问题标签",
       dataIndex: "issue_tags",
       render: (tags: string[]) => <Space size={[0, 4]} wrap>{tags.map((tag) => issueTag(tag))}</Space>
+    },
+    {
+      title: "判断依据",
+      dataIndex: "lifecycle_reasons",
+      width: 260,
+      render: (reasons: string[]) => reasons?.join("；") || "-"
     }
   ];
 
@@ -152,18 +182,29 @@ export default function MetadataQuality() {
           </Card>
         </Col>
         <Col xs={24} lg={14}>
-          <Card title="业务域质量">
+          <Card title="未分类诊断">
             <Table
-              rowKey="business_domain"
+              rowKey="diagnostic_code"
               size="small"
               loading={qualityQuery.isLoading}
-              dataSource={data?.domain_quality || []}
-              columns={domainColumns}
-              pagination={{ pageSize: 8 }}
+              dataSource={data?.unclassified_diagnostics || []}
+              columns={diagnosticColumns}
+              pagination={false}
             />
           </Card>
         </Col>
       </Row>
+
+      <Card title="业务域质量">
+        <Table
+          rowKey="business_domain"
+          size="small"
+          loading={qualityQuery.isLoading}
+          dataSource={data?.domain_quality || []}
+          columns={domainColumns}
+          pagination={{ pageSize: 8 }}
+        />
+      </Card>
 
       <Card title="优先治理表">
         <Table
@@ -172,7 +213,7 @@ export default function MetadataQuality() {
           dataSource={data?.top_issue_tables || []}
           columns={tableColumns}
           pagination={{ pageSize: 12 }}
-          scroll={{ x: 1280 }}
+          scroll={{ x: 1560 }}
         />
       </Card>
     </Space>

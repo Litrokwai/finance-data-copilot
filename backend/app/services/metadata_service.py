@@ -11,6 +11,19 @@ from app.models.procedure_lineage_edge import ProcedureLineageEdge
 
 UNKNOWN_DOMAIN = "未分类"
 UNCLASSIFIED_DOMAINS = {"", UNKNOWN_DOMAIN, "好股库未分类"}
+TEST_OR_TEMP_TABLE_TOKENS = (
+    "test",
+    "tmp",
+    "temp",
+    "bak",
+    "backup",
+    "demo",
+    "sample",
+    "delete",
+    "del_",
+    "_del",
+    "old",
+)
 
 
 def _domain_expr():
@@ -273,6 +286,7 @@ def get_metadata_quality(db: Session) -> dict:
         table_items.append(item)
 
     unclassified_tables = sum(1 for item in table_items if _is_unclassified_domain(item["business_domain"]))
+    unclassified_items = [item for item in table_items if _is_unclassified_domain(item["business_domain"])]
     tables_missing_comment = sum(1 for item in table_items if not _has_text(item["table_comment"]))
     tables_without_columns = sum(1 for item in table_items if item["column_count"] == 0)
     valid_tables_with_columns = [item for item in table_items if item["is_valid"] and item["column_count"] > 0]
@@ -314,6 +328,7 @@ def get_metadata_quality(db: Session) -> dict:
             {"issue_code": "COLUMN_UNKNOWN_NULLABLE", "issue_name": "字段是否为空未知", "count": columns_unknown_nullable},
             {"issue_code": "COLUMN_TYPE_ANOMALY", "issue_name": "字段类型异常", "count": columns_type_anomaly},
         ],
+        "unclassified_diagnostics": _build_unclassified_diagnostics(unclassified_items),
         "domain_quality": domain_quality,
         "top_issue_tables": sorted(
             table_items,
@@ -344,6 +359,13 @@ def _build_quality_table_item(table: MetadataTable, columns: list[MetadataColumn
     missing_business_desc_count = sum(1 for column in columns if column.is_valid and not _has_text(column.business_desc))
     unknown_nullable_count = sum(1 for column in columns if column.is_valid and column.is_nullable is None)
     type_anomaly_count = sum(1 for column in columns if column.is_valid and _is_type_anomaly(column.data_type))
+    lifecycle_hint, lifecycle_reasons = _diagnose_table_lifecycle(
+        table,
+        column_count=column_count,
+        primary_key_count=primary_key_count,
+        missing_column_comment_count=missing_column_comment_count,
+        lineage_ref_count=lineage_ref_count,
+    )
     issue_tags = []
 
     if not table.is_valid:
@@ -364,6 +386,12 @@ def _build_quality_table_item(table: MetadataTable, columns: list[MetadataColumn
         issue_tags.append("是否为空未知")
     if type_anomaly_count:
         issue_tags.append("字段类型异常")
+    if lifecycle_hint == "SUSPECTED_TEST_OR_TEMP":
+        issue_tags.append("疑似测试临时")
+    if lifecycle_hint == "SUSPECTED_UNUSED":
+        issue_tags.append("疑似遗留无用")
+    if lifecycle_hint == "ACTIVE_UNCLASSIFIED":
+        issue_tags.append("仍被引用")
 
     quality_score = 100
     if not table.is_valid:
@@ -386,6 +414,7 @@ def _build_quality_table_item(table: MetadataTable, columns: list[MetadataColumn
         "table_name": table.table_name,
         "table_comment": table.table_comment,
         "business_domain": table.business_domain,
+        "update_frequency": table.update_frequency,
         "is_valid": table.is_valid,
         "column_count": column_count,
         "primary_key_count": primary_key_count,
@@ -395,7 +424,92 @@ def _build_quality_table_item(table: MetadataTable, columns: list[MetadataColumn
         "lineage_ref_count": lineage_ref_count,
         "quality_score": max(0, quality_score),
         "issue_tags": issue_tags,
+        "lifecycle_hint": lifecycle_hint,
+        "lifecycle_reasons": lifecycle_reasons,
+        "updated_at": table.updated_at,
     }
+
+
+def _build_unclassified_diagnostics(items: list[dict]) -> list[dict]:
+    definitions = {
+        "ACTIVE_UNCLASSIFIED": {
+            "diagnostic_name": "仍被血缘引用",
+            "description": "未分类但仍出现在存储过程读写血缘中，优先补业务分类。",
+        },
+        "SUSPECTED_TEST_OR_TEMP": {
+            "diagnostic_name": "疑似测试或临时表",
+            "description": "表名包含 test、tmp、temp、bak、delete、old 等信号，需确认是否应下线或排除。",
+        },
+        "SUSPECTED_UNUSED": {
+            "diagnostic_name": "疑似遗留无用表",
+            "description": "无血缘引用、缺少表中文名且缺主键，可能是历史遗留或低价值表。",
+        },
+        "NEEDS_CLASSIFICATION": {
+            "diagnostic_name": "待补业务分类",
+            "description": "未分类且未命中明显测试/遗留信号，需要人工补充业务域。",
+        },
+        "OFFLINE": {
+            "diagnostic_name": "已下线",
+            "description": "源端已标记为下线，不应进入后续 AI 问答候选。",
+        },
+    }
+    counts: dict[str, int] = {}
+    for item in items:
+        hint = item.get("lifecycle_hint") or "NEEDS_CLASSIFICATION"
+        counts[hint] = counts.get(hint, 0) + 1
+    return [
+        {
+            "diagnostic_code": code,
+            "diagnostic_name": meta["diagnostic_name"],
+            "count": counts.get(code, 0),
+            "description": meta["description"],
+        }
+        for code, meta in definitions.items()
+    ]
+
+
+def _diagnose_table_lifecycle(
+    table: MetadataTable,
+    *,
+    column_count: int,
+    primary_key_count: int,
+    missing_column_comment_count: int,
+    lineage_ref_count: int,
+) -> tuple[str, list[str]]:
+    if not table.is_valid:
+        return "OFFLINE", ["源端已标记为下线表。"]
+
+    reasons = []
+    table_name = table.table_name or ""
+    is_unclassified = _is_unclassified_domain(table.business_domain)
+    if is_unclassified and lineage_ref_count > 0:
+        reasons.append(f"当前血缘中仍有 {lineage_ref_count} 次读写引用。")
+        if not _has_text(table.table_comment):
+            reasons.append("缺少表中文名，影响后续 RAG 和人工理解。")
+        return "ACTIVE_UNCLASSIFIED", reasons
+
+    if is_unclassified and _looks_like_test_or_temp_table(table_name):
+        reasons.append("表名命中测试、临时、备份、删除或历史遗留命名信号。")
+        if lineage_ref_count == 0:
+            reasons.append("当前血缘中没有读写引用。")
+        return "SUSPECTED_TEST_OR_TEMP", reasons
+
+    if is_unclassified and lineage_ref_count == 0 and not _has_text(table.table_comment) and primary_key_count == 0:
+        reasons.append("当前血缘中没有读写引用。")
+        reasons.append("缺少表中文名。")
+        if column_count > 0:
+            reasons.append("没有主键信息。")
+        if missing_column_comment_count:
+            reasons.append("字段中文名缺失较多。")
+        return "SUSPECTED_UNUSED", reasons
+
+    if is_unclassified:
+        reasons.append("业务域仍为未分类，需要人工补充或进入推荐分类流程。")
+        if not _has_text(table.table_comment):
+            reasons.append("缺少表中文名。")
+        return "NEEDS_CLASSIFICATION", reasons
+
+    return "NORMAL", ["已有业务域分类。"]
 
 
 def _build_domain_quality(table_items: list[dict]) -> list[dict]:
@@ -450,6 +564,11 @@ def _is_type_anomaly(data_type: str | None) -> bool:
         return True
     normalized = data_type.strip().lower()
     return "(-1)" in normalized
+
+
+def _looks_like_test_or_temp_table(table_name: str) -> bool:
+    short_name = _table_quality_key(table_name)
+    return any(token in short_name for token in TEST_OR_TEMP_TABLE_TOKENS)
 
 
 def _ratio(numerator: int, denominator: int) -> float:

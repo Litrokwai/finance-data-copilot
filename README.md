@@ -153,7 +153,7 @@ $env:DATA_DICT_COOKIE="你的浏览器 Cookie"
 
 ## 元数据质量
 
-元数据质量页面读取本地 PostgreSQL 中的 `metadata_table`、`metadata_column` 和 `procedure_lineage_edge`，用于识别后续 AI 问答和血缘分析前需要优先治理的表和字段。当前不会修改源端分类，也不会覆盖 `metadata_table.business_domain`；空业务域、`未分类` 和 `好股库未分类` 会统一作为“待治理分类”参与统计。页面展示可用表、待治理分类、缺主键可用表、字段中文名覆盖率、表中文名覆盖率、业务域质量和优先治理表。
+元数据质量页面读取本地 PostgreSQL 中的 `metadata_table`、`metadata_column` 和 `procedure_lineage_edge`，用于识别后续 AI 问答和血缘分析前需要优先治理的表和字段。当前不会修改源端分类，也不会覆盖 `metadata_table.business_domain`；空业务域、`未分类` 和 `好股库未分类` 会统一作为“待治理分类”参与统计。页面展示可用表、待治理分类、缺主键可用表、字段中文名覆盖率、表中文名覆盖率、业务域质量和优先治理表。未分类表会按命名模式、血缘引用、表中文名和主键拆分为仍被引用、疑似测试临时、疑似遗留无用和待补分类。`metadata_table.updated_at` 是本地元数据记录更新时间，不直接代表业务表真实数据更新时间。
 
 ## 存储过程血缘
 

@@ -102,6 +102,7 @@ class MetadataQualityTableItem(BaseModel):
     table_name: str
     table_comment: str | None = None
     business_domain: str | None = None
+    update_frequency: str | None = None
     is_valid: bool
     column_count: int
     primary_key_count: int
@@ -111,6 +112,16 @@ class MetadataQualityTableItem(BaseModel):
     lineage_ref_count: int
     quality_score: int
     issue_tags: list[str]
+    lifecycle_hint: str
+    lifecycle_reasons: list[str]
+    updated_at: datetime | None = None
+
+
+class MetadataUnclassifiedDiagnosticStat(BaseModel):
+    diagnostic_code: str
+    diagnostic_name: str
+    count: int
+    description: str
 
 
 class MetadataQualitySummary(BaseModel):
@@ -131,5 +142,6 @@ class MetadataQualitySummary(BaseModel):
     column_comment_coverage: float
     primary_key_coverage: float
     issue_stats: list[MetadataQualityIssueStat]
+    unclassified_diagnostics: list[MetadataUnclassifiedDiagnosticStat]
     domain_quality: list[MetadataQualityDomainStat]
     top_issue_tables: list[MetadataQualityTableItem]
