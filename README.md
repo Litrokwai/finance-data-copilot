@@ -35,6 +35,8 @@ finance-data-copilot/
 └── README.md
 ```
 
+当前产品阶段、数据规模、主线优先级和后续路线见 `docs/Product_Status.md`。当前阶段以元数据资产底座为优先主线，先确认可用表和可用字段，再继续完善血缘复核、影响分析和 AI 问答。
+
 ## 本地启动
 
 1. 启动 PostgreSQL，并创建数据库 `finance_data_copilot`。如果本机已安装 PostgreSQL，可以执行：
