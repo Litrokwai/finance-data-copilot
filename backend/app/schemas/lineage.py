@@ -38,3 +38,11 @@ class ProcedureLineageDetail(ProcedureLineageItem):
 class ProcedureLineageGraph(BaseModel):
     nodes: list[dict]
     edges: list[dict]
+
+
+class LineageReviewUpdate(BaseModel):
+    target_type: str
+    target_id: int
+    review_status: str
+    review_note: str | None = None
+    reviewer: str | None = None

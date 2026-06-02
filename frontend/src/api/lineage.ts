@@ -2,6 +2,10 @@ import request from "./request";
 import type { ApiResponse } from "../types/sql";
 import type {
   LineageGraph,
+  LineageReviewItem,
+  LineageReviewQuery,
+  LineageReviewSummary,
+  LineageReviewUpdate,
   LineageSummary,
   LineageTableImpact,
   LineageTableUsage,
@@ -34,4 +38,16 @@ export function getLineageTableImpact(tableName: string) {
   return request
     .get<ApiResponse<LineageTableImpact>>("/api/lineage/table-impact", { params: { table_name: tableName } })
     .then((res) => res.data.data);
+}
+
+export function getLineageReviewSummary(params?: Pick<LineageReviewQuery, "confidence_threshold">) {
+  return request.get<ApiResponse<LineageReviewSummary>>("/api/lineage/review/summary", { params }).then((res) => res.data.data);
+}
+
+export function getLineageReviewItems(params?: LineageReviewQuery) {
+  return request.get<ApiResponse<LineageReviewItem[]>>("/api/lineage/review/items", { params }).then((res) => res.data.data);
+}
+
+export function updateLineageReviewItem(payload: LineageReviewUpdate) {
+  return request.post<ApiResponse<LineageReviewUpdate>>("/api/lineage/review/items", payload).then((res) => res.data.data);
 }

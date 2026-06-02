@@ -68,5 +68,10 @@
 | GET | `/api/lineage/tables` | 返回血缘中涉及的数据表列表，支持 `keyword` 和 `limit`，用于表影响分析入口 |
 | GET | `/api/lineage/table-impact` | 返回单表影响范围，参数 `table_name`，包括读取该表的过程、写入该表的过程和相关表间链路 |
 | GET | `/api/lineage/graph` | 返回前端关系图使用的过程节点、表节点和 READ/WRITE 边，支持 `keyword`、`parse_status` 和 `max_procedures` |
+| GET | `/api/lineage/review/summary` | 返回血缘复核候选统计，包括过程复核数、低置信度边数、待复核、已确认、需修正和已忽略数量 |
+| GET | `/api/lineage/review/items` | 返回血缘复核候选列表，支持 `status`、`target_type`、`keyword`、`confidence_threshold` 和 `limit` |
+| POST | `/api/lineage/review/items` | 更新单个复核对象的状态、备注和复核人，写入本项目 PostgreSQL 的 `lineage_review_record` |
 
 `parse_status` 当前支持 `SUCCESS` 和 `REVIEW`。结构化血缘边包括 `READ`、`WRITE` 和 `TABLE_FLOW` 三类。`READ/WRITE` 表示过程与表的关系，`TABLE_FLOW` 表示同一语句中由读取对象推导到写入对象的表间链路。动态 SQL 会将过程标记为 `REVIEW`，结果需要人工复核；详情接口会返回复核原因和语句片段，用于人工判断。表影响分析只读取已同步的本地血缘缓存，并会过滤明显的 SQL 别名噪声；同一表名的大小写差异会按大小写不敏感规则合并，读取过程和写入过程按存储过程去重统计。
+
+血缘复核工作台的 `target_type` 当前支持 `PROCEDURE` 和 `EDGE`，`review_status` 支持 `PENDING`、`CONFIRMED`、`NEEDS_FIX` 和 `IGNORED`。V1 候选范围包括 `procedure_lineage_record.parse_status = REVIEW` 的过程，以及置信度小于等于阈值的 `READ/WRITE` 结构化边；`TABLE_FLOW` 属于推导链路，暂不进入默认复核候选，避免候选量过大。复核接口只写入本地 PostgreSQL 复核记录，不连接公司业务库，也不执行任何 SQL 或存储过程。

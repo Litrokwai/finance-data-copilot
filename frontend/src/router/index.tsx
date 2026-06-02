@@ -2,6 +2,7 @@ import { createBrowserRouter, Navigate } from "react-router-dom";
 import App from "../App";
 import Dashboard from "../pages/Dashboard";
 import History from "../pages/History";
+import LineageReview from "../pages/LineageReview";
 import MetadataPanorama from "../pages/MetadataPanorama";
 import ProcedureLineage from "../pages/ProcedureLineage";
 import SqlAnalyze from "../pages/SqlAnalyze";
@@ -16,6 +17,7 @@ export const router = createBrowserRouter([
       { path: "dashboard", element: <Dashboard /> },
       { path: "metadata", element: <MetadataPanorama /> },
       { path: "procedure-lineage", element: <ProcedureLineage /> },
+      { path: "lineage-review", element: <LineageReview /> },
       { path: "sql-analyze", element: <SqlAnalyze /> },
       { path: "sql-risk-check", element: <SqlRiskCheck /> },
       { path: "history", element: <History /> }

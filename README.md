@@ -17,6 +17,7 @@ Finance Data Copilot，中文名“金融数据 AI 开发助手”，是一个�
 - Dashboard：展示分析总量、风险分布和最近趋势。
 - 元数据全景：基于 PostgreSQL 中已同步的好股库元数据，展示表、字段、业务域、下线状态、敏感字段和业务域资产矩阵。
 - 存储过程血缘：基于链接服务器只读获取的存储过程定义，解析过程与表之间的读取、写入和临时表关系。
+- 血缘复核工作台：聚合动态 SQL 过程和低置信度读写边，支持确认、标记需修正、忽略和备注。
 - 数据库初始化：提供 schema.sql、seed.sql 和 Alembic 初始迁移。
 - 公司元数据同步：支持从公司 SQL Server 的 `ai_platform` 元数据表只读同步好股库表、字段和指标口径。
 - AI 模块预留：统一封装 `explain_sql_with_llm`，无 API Key 时返回 mock 结果。
@@ -75,6 +76,7 @@ npm run dev
 - `/dashboard`：SQL 分析统计 Dashboard
 - `/metadata`：元数据全景
 - `/procedure-lineage`：存储过程血缘
+- `/lineage-review`：血缘复核工作台
 - `/sql-analyze`：SQL 解释
 - `/sql-risk-check`：SQL 风险检查
 - `/history`：SQL 分析历史
@@ -148,6 +150,10 @@ $env:DATA_DICT_COOKIE="你的浏览器 Cookie"
 ## 存储过程血缘
 
 存储过程血缘页面读取本地 PostgreSQL 中的 `procedure_lineage_record` 和 `procedure_lineage_edge`，用于展示过程数量、读取表数量、写入表数量、血缘边数量、需复核数量、过程与表关系图、单过程详情和结构化血缘边。列表支持按过程名、涉及表和解析状态筛选，点击“需复核”统计卡可快速聚焦动态 SQL 或复杂语句。表影响分析支持从数据表视角查看读取该表的过程、写入该表的过程和相关表间链路，并过滤明显的 SQL 别名噪声。详情中会展示复核原因和语句片段。该页面不连接公司业务库，也不提供 SQL 或存储过程执行入口。
+
+## 血缘复核工作台
+
+血缘复核工作台读取本地 PostgreSQL 中的 `procedure_lineage_record`、`procedure_lineage_edge` 和 `lineage_review_record`。V1 默认把解析状态为 `REVIEW` 的过程、以及低置信度 `READ/WRITE` 边纳入候选，支持按状态、对象类型和关键词筛选，并可标记为已确认、需修正或已忽略。复核结果仅写入本项目 PostgreSQL，不连接公司业务库，不执行 SQL 或存储过程。
 
 ## 后续规划
 

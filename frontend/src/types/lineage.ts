@@ -75,6 +75,56 @@ export interface LineageTableImpact {
   table_flow_edges: ProcedureLineageEdge[];
 }
 
+export type LineageReviewStatus = "PENDING" | "CONFIRMED" | "NEEDS_FIX" | "IGNORED";
+export type LineageReviewTargetType = "PROCEDURE" | "EDGE";
+
+export interface LineageReviewSummary {
+  total_candidates: number;
+  procedure_review_count: number;
+  low_confidence_edge_count: number;
+  pending_count: number;
+  confirmed_count: number;
+  needs_fix_count: number;
+  ignored_count: number;
+  confidence_threshold: number;
+}
+
+export interface LineageReviewItem {
+  target_type: LineageReviewTargetType;
+  target_id: number;
+  procedure_id: number;
+  procedure_name: string;
+  issue_type: "PARSE_REVIEW" | "LOW_CONFIDENCE_EDGE";
+  issue_reason: string;
+  confidence?: number;
+  source_object?: string;
+  target_object?: string;
+  relation_type?: "READ" | "WRITE" | "TABLE_FLOW";
+  statement_type?: string;
+  statement_index?: number;
+  statement_snippet?: string;
+  review_status: LineageReviewStatus;
+  review_note?: string;
+  reviewer?: string;
+  review_updated_at?: string;
+}
+
+export interface LineageReviewQuery {
+  status?: LineageReviewStatus;
+  target_type?: LineageReviewTargetType;
+  keyword?: string;
+  confidence_threshold?: number;
+  limit?: number;
+}
+
+export interface LineageReviewUpdate {
+  target_type: LineageReviewTargetType;
+  target_id: number;
+  review_status: LineageReviewStatus;
+  review_note?: string;
+  reviewer?: string;
+}
+
 export interface LineageGraphNode {
   id: string;
   name: string;

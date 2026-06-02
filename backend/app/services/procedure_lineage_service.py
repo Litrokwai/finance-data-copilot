@@ -5,12 +5,17 @@ import re
 from datetime import datetime
 from typing import Iterable
 
-from sqlalchemy import String, cast, func, or_
+from sqlalchemy import String, and_, cast, func, or_
 from sqlalchemy.orm import Session
 
+from app.models.lineage_review_record import LineageReviewRecord
 from app.models.metadata_table import MetadataTable
 from app.models.procedure_lineage_edge import ProcedureLineageEdge
 from app.models.procedure_lineage_record import ProcedureLineageRecord
+
+REVIEW_STATUSES = {"PENDING", "CONFIRMED", "NEEDS_FIX", "IGNORED"}
+REVIEW_TARGET_TYPES = {"PROCEDURE", "EDGE"}
+DEFAULT_LOW_CONFIDENCE_THRESHOLD = 0.75
 
 
 READ_PATTERN = re.compile(r"\b(?:FROM|JOIN|APPLY)\s+([#@\[\]\w.]+)", re.IGNORECASE)
@@ -393,6 +398,102 @@ def get_table_impact(db: Session, table_name: str) -> dict:
     }
 
 
+def get_lineage_review_summary(db: Session, confidence_threshold: float = DEFAULT_LOW_CONFIDENCE_THRESHOLD) -> dict:
+    status_counts = {
+        status: count
+        for status, count in db.query(LineageReviewRecord.review_status, func.count(LineageReviewRecord.id))
+        .group_by(LineageReviewRecord.review_status)
+        .all()
+    }
+    procedure_review_count = (
+        db.query(func.count(ProcedureLineageRecord.id))
+        .filter(ProcedureLineageRecord.parse_status == "REVIEW")
+        .scalar()
+        or 0
+    )
+    low_confidence_edge_count = (
+        db.query(func.count(ProcedureLineageEdge.id))
+        .filter(_low_confidence_edge_filter(confidence_threshold))
+        .scalar()
+        or 0
+    )
+    total_candidates = procedure_review_count + low_confidence_edge_count
+    handled_count = (
+        (status_counts.get("CONFIRMED") or 0)
+        + (status_counts.get("NEEDS_FIX") or 0)
+        + (status_counts.get("IGNORED") or 0)
+    )
+    return {
+        "total_candidates": total_candidates,
+        "procedure_review_count": procedure_review_count,
+        "low_confidence_edge_count": low_confidence_edge_count,
+        "pending_count": max(total_candidates - handled_count, 0),
+        "confirmed_count": status_counts.get("CONFIRMED") or 0,
+        "needs_fix_count": status_counts.get("NEEDS_FIX") or 0,
+        "ignored_count": status_counts.get("IGNORED") or 0,
+        "confidence_threshold": confidence_threshold,
+    }
+
+
+def list_lineage_review_items(
+    db: Session,
+    *,
+    status: str | None = None,
+    target_type: str | None = None,
+    keyword: str | None = None,
+    confidence_threshold: float = DEFAULT_LOW_CONFIDENCE_THRESHOLD,
+    limit: int = 200,
+) -> list[dict]:
+    review_map = _review_record_map(db)
+    candidates = [
+        *_procedure_review_candidates(db, review_map, keyword),
+        *_edge_review_candidates(db, review_map, keyword, confidence_threshold),
+    ]
+
+    normalized_status = status.strip().upper() if status and status.strip() else None
+    normalized_target_type = target_type.strip().upper() if target_type and target_type.strip() else None
+    if normalized_status:
+        candidates = [item for item in candidates if item["review_status"] == normalized_status]
+    if normalized_target_type:
+        candidates = [item for item in candidates if item["target_type"] == normalized_target_type]
+
+    candidates.sort(key=lambda item: (_review_priority(item), item["procedure_name"], item["target_id"]))
+    return candidates[:limit]
+
+
+def update_lineage_review_item(
+    db: Session,
+    *,
+    target_type: str,
+    target_id: int,
+    review_status: str,
+    review_note: str | None = None,
+    reviewer: str | None = None,
+) -> dict:
+    normalized_target_type = target_type.strip().upper()
+    normalized_status = review_status.strip().upper()
+    if normalized_target_type not in REVIEW_TARGET_TYPES:
+        raise ValueError("target_type must be PROCEDURE or EDGE")
+    if normalized_status not in REVIEW_STATUSES:
+        raise ValueError("review_status must be PENDING, CONFIRMED, NEEDS_FIX or IGNORED")
+
+    record = (
+        db.query(LineageReviewRecord)
+        .filter(LineageReviewRecord.target_type == normalized_target_type, LineageReviewRecord.target_id == target_id)
+        .one_or_none()
+    )
+    if record is None:
+        record = LineageReviewRecord(target_type=normalized_target_type, target_id=target_id)
+        db.add(record)
+
+    record.review_status = normalized_status
+    record.review_note = review_note
+    record.reviewer = reviewer
+    db.commit()
+    db.refresh(record)
+    return _build_review_record(record)
+
+
 def _build_item(db: Session, record: ProcedureLineageRecord) -> dict:
     edge_count = (
         db.query(func.count(ProcedureLineageEdge.id))
@@ -535,6 +636,149 @@ def _procedure_refs(edges: list[ProcedureLineageEdge]) -> list[dict]:
             }
         )
     return result
+
+
+def _review_record_map(db: Session) -> dict[tuple[str, int], LineageReviewRecord]:
+    records = db.query(LineageReviewRecord).all()
+    return {(record.target_type, record.target_id): record for record in records}
+
+
+def _procedure_review_candidates(
+    db: Session,
+    review_map: dict[tuple[str, int], LineageReviewRecord],
+    keyword: str | None = None,
+) -> list[dict]:
+    query = db.query(ProcedureLineageRecord).filter(ProcedureLineageRecord.parse_status == "REVIEW")
+    if keyword and keyword.strip():
+        pattern = f"%{keyword.strip()}%"
+        query = query.filter(ProcedureLineageRecord.procedure_name.ilike(pattern))
+
+    candidates = []
+    for record in query.order_by(ProcedureLineageRecord.procedure_name.asc()).all():
+        review_record = review_map.get(("PROCEDURE", record.id))
+        candidates.append(
+            _build_review_item(
+                target_type="PROCEDURE",
+                target_id=record.id,
+                procedure_id=record.id,
+                procedure_name=record.procedure_name,
+                issue_type="PARSE_REVIEW",
+                issue_reason=record.parse_message or "解析状态为 REVIEW，需要人工复核。",
+                confidence=None,
+                source_object=None,
+                target_object=None,
+                relation_type=None,
+                statement_type=None,
+                statement_index=None,
+                statement_snippet=None,
+                review_record=review_record,
+            )
+        )
+    return candidates
+
+
+def _edge_review_candidates(
+    db: Session,
+    review_map: dict[tuple[str, int], LineageReviewRecord],
+    keyword: str | None,
+    confidence_threshold: float,
+) -> list[dict]:
+    query = db.query(ProcedureLineageEdge).filter(_low_confidence_edge_filter(confidence_threshold))
+    if keyword and keyword.strip():
+        pattern = f"%{keyword.strip()}%"
+        query = query.filter(
+            or_(
+                ProcedureLineageEdge.procedure_name.ilike(pattern),
+                ProcedureLineageEdge.source_object.ilike(pattern),
+                ProcedureLineageEdge.target_object.ilike(pattern),
+            )
+        )
+
+    candidates = []
+    for edge in query.order_by(ProcedureLineageEdge.confidence.asc(), ProcedureLineageEdge.procedure_name.asc()).limit(1000).all():
+        review_record = review_map.get(("EDGE", edge.id))
+        candidates.append(
+            _build_review_item(
+                target_type="EDGE",
+                target_id=edge.id,
+                procedure_id=edge.procedure_id,
+                procedure_name=edge.procedure_name,
+                issue_type="LOW_CONFIDENCE_EDGE",
+                issue_reason="血缘边置信度低于阈值，需要确认来源、目标和关系类型。",
+                confidence=edge.confidence,
+                source_object=edge.source_object,
+                target_object=edge.target_object,
+                relation_type=edge.relation_type,
+                statement_type=edge.statement_type,
+                statement_index=edge.statement_index,
+                statement_snippet=edge.statement_snippet,
+                review_record=review_record,
+            )
+        )
+    return candidates
+
+
+def _build_review_item(
+    *,
+    target_type: str,
+    target_id: int,
+    procedure_id: int,
+    procedure_name: str,
+    issue_type: str,
+    issue_reason: str,
+    confidence: float | None,
+    source_object: str | None,
+    target_object: str | None,
+    relation_type: str | None,
+    statement_type: str | None,
+    statement_index: int | None,
+    statement_snippet: str | None,
+    review_record: LineageReviewRecord | None,
+) -> dict:
+    return {
+        "target_type": target_type,
+        "target_id": target_id,
+        "procedure_id": procedure_id,
+        "procedure_name": procedure_name,
+        "issue_type": issue_type,
+        "issue_reason": issue_reason,
+        "confidence": confidence,
+        "source_object": source_object,
+        "target_object": target_object,
+        "relation_type": relation_type,
+        "statement_type": statement_type,
+        "statement_index": statement_index,
+        "statement_snippet": statement_snippet,
+        "review_status": review_record.review_status if review_record else "PENDING",
+        "review_note": review_record.review_note if review_record else None,
+        "reviewer": review_record.reviewer if review_record else None,
+        "review_updated_at": review_record.updated_at.isoformat() if review_record and review_record.updated_at else None,
+    }
+
+
+def _build_review_record(record: LineageReviewRecord) -> dict:
+    return {
+        "id": record.id,
+        "target_type": record.target_type,
+        "target_id": record.target_id,
+        "review_status": record.review_status,
+        "review_note": record.review_note,
+        "reviewer": record.reviewer,
+        "updated_at": record.updated_at.isoformat() if record.updated_at else None,
+    }
+
+
+def _review_priority(item: dict) -> tuple[int, float]:
+    status_priority = {"PENDING": 0, "NEEDS_FIX": 1, "CONFIRMED": 2, "IGNORED": 3}
+    confidence = item["confidence"] if item["confidence"] is not None else 0
+    return (status_priority.get(item["review_status"], 9), confidence)
+
+
+def _low_confidence_edge_filter(confidence_threshold: float):
+    return and_(
+        ProcedureLineageEdge.relation_type.in_(["READ", "WRITE"]),
+        ProcedureLineageEdge.confidence <= confidence_threshold,
+    )
 
 
 def _known_table_names(db: Session) -> set[str]:

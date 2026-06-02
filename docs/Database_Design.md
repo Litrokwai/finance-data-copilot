@@ -175,9 +175,26 @@ V1 不在 API 中返回存储过程正文，只展示解析后的表关系。后
 
 `procedure_lineage_edge` 在每次同步单个过程时先删除该过程旧边，再写入新边。动态 SQL、变量表名等场景会降低置信度或标记为需复核。
 
+## lineage_review_record
+
+保存血缘复核工作台的人工复核状态。该表只存在于本项目 PostgreSQL，用于标记已同步血缘结果是否确认、需修正或忽略，不写入公司 SQL Server，也不触发任何 SQL 或存储过程执行。
+
+| 字段 | 含义 |
+| --- | --- |
+| id | 主键 |
+| target_type | 复核对象类型：`PROCEDURE` 或 `EDGE` |
+| target_id | 复核对象 ID，对应 `procedure_lineage_record.id` 或 `procedure_lineage_edge.id` |
+| review_status | 复核状态：`PENDING`、`CONFIRMED`、`NEEDS_FIX`、`IGNORED` |
+| review_note | 复核备注 |
+| reviewer | 复核人标识 |
+| created_at | 创建时间 |
+| updated_at | 更新时间 |
+
+`target_type` 和 `target_id` 组合唯一，避免同一复核对象重复生成多条状态记录。V1 的复核候选由服务层动态计算：解析状态为 `REVIEW` 的过程，以及低置信度 `READ/WRITE` 边；人工状态记录只保存用户操作结果。
+
 ## 表关系
 
-V1 暂不强制建立元数据表外键，避免元数据录入不完整时影响演示。后续可按 `metadata_column.table_name` 与 `metadata_table.table_name` 建立逻辑关系，指标表通过 JSONB 保存来源表和字段。存储过程血缘保留 `procedure_lineage_record.lineage_edges` 作为兼容 JSON，同时通过 `procedure_lineage_edge` 保存结构化边。
+V1 暂不强制建立元数据表外键，避免元数据录入不完整时影响演示。后续可按 `metadata_column.table_name` 与 `metadata_table.table_name` 建立逻辑关系，指标表通过 JSONB 保存来源表和字段。存储过程血缘保留 `procedure_lineage_record.lineage_edges` 作为兼容 JSON，同时通过 `procedure_lineage_edge` 保存结构化边；血缘复核状态通过 `lineage_review_record.target_type + target_id` 逻辑关联到过程或边。
 
 ## 初始化数据规则
 

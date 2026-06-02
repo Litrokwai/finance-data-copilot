@@ -120,3 +120,19 @@ CREATE INDEX IF NOT EXISTS idx_procedure_lineage_edge_procedure_name ON procedur
 CREATE INDEX IF NOT EXISTS idx_procedure_lineage_edge_source_object ON procedure_lineage_edge(source_object);
 CREATE INDEX IF NOT EXISTS idx_procedure_lineage_edge_target_object ON procedure_lineage_edge(target_object);
 CREATE INDEX IF NOT EXISTS idx_procedure_lineage_edge_relation_type ON procedure_lineage_edge(relation_type);
+
+CREATE TABLE IF NOT EXISTS lineage_review_record (
+    id SERIAL PRIMARY KEY,
+    target_type VARCHAR(50) NOT NULL,
+    target_id INTEGER NOT NULL,
+    review_status VARCHAR(50) NOT NULL DEFAULT 'PENDING',
+    review_note TEXT,
+    reviewer VARCHAR(100),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    CONSTRAINT uq_lineage_review_target UNIQUE (target_type, target_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_lineage_review_record_target_type ON lineage_review_record(target_type);
+CREATE INDEX IF NOT EXISTS idx_lineage_review_record_target_id ON lineage_review_record(target_id);
+CREATE INDEX IF NOT EXISTS idx_lineage_review_record_review_status ON lineage_review_record(review_status);
