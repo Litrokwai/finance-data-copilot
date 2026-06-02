@@ -69,4 +69,4 @@
 | GET | `/api/lineage/table-impact` | 返回单表影响范围，参数 `table_name`，包括读取该表的过程、写入该表的过程和相关表间链路 |
 | GET | `/api/lineage/graph` | 返回前端关系图使用的过程节点、表节点和 READ/WRITE 边，支持 `keyword`、`parse_status` 和 `max_procedures` |
 
-`parse_status` 当前支持 `SUCCESS` 和 `REVIEW`。结构化血缘边包括 `READ`、`WRITE` 和 `TABLE_FLOW` 三类。`READ/WRITE` 表示过程与表的关系，`TABLE_FLOW` 表示同一语句中由读取对象推导到写入对象的表间链路。动态 SQL 会将过程标记为 `REVIEW`，结果需要人工复核；详情接口会返回复核原因和语句片段，用于人工判断。表影响分析只读取已同步的本地血缘缓存，并会过滤明显的 SQL 别名噪声。
+`parse_status` 当前支持 `SUCCESS` 和 `REVIEW`。结构化血缘边包括 `READ`、`WRITE` 和 `TABLE_FLOW` 三类。`READ/WRITE` 表示过程与表的关系，`TABLE_FLOW` 表示同一语句中由读取对象推导到写入对象的表间链路。动态 SQL 会将过程标记为 `REVIEW`，结果需要人工复核；详情接口会返回复核原因和语句片段，用于人工判断。表影响分析只读取已同步的本地血缘缓存，并会过滤明显的 SQL 别名噪声；同一表名的大小写差异会按大小写不敏感规则合并，读取过程和写入过程按存储过程去重统计。

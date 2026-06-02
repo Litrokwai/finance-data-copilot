@@ -183,18 +183,20 @@ def get_lineage_summary(db: Session) -> dict:
         or 0
     )
     read_tables = {
-        row[0]
+        _canonical_table_key(row[0])
         for row in db.query(ProcedureLineageEdge.source_object)
         .filter(ProcedureLineageEdge.relation_type == "READ", ProcedureLineageEdge.source_kind == "table")
         .distinct()
         .all()
+        if row[0]
     }
     write_tables = {
-        row[0]
+        _canonical_table_key(row[0])
         for row in db.query(ProcedureLineageEdge.target_object)
         .filter(ProcedureLineageEdge.relation_type == "WRITE", ProcedureLineageEdge.target_kind == "table")
         .distinct()
         .all()
+        if row[0]
     }
     latest_sync_time = db.query(func.max(ProcedureLineageRecord.synced_at)).scalar()
     return {
@@ -321,22 +323,25 @@ def list_lineage_tables(db: Session, keyword: str | None = None, limit: int = 20
     known_tables = _known_table_names(db)
     table_map: dict[str, dict] = {}
 
-    for table_name, procedure_count, edge_count in read_rows:
+    for table_name, procedure_names, edge_count in read_rows:
         if not _is_known_or_qualified_table(table_name, known_tables):
             continue
-        table_map.setdefault(table_name, _empty_table_usage(table_name))
-        table_map[table_name]["read_by_count"] = procedure_count
-        table_map[table_name]["read_edge_count"] = edge_count
-    for table_name, procedure_count, edge_count in write_rows:
+        key = _canonical_table_key(table_name)
+        item = table_map.setdefault(key, _empty_table_usage(table_name))
+        _merge_table_usage(item, table_name, procedure_names, edge_count, "read")
+    for table_name, procedure_names, edge_count in write_rows:
         if not _is_known_or_qualified_table(table_name, known_tables):
             continue
-        table_map.setdefault(table_name, _empty_table_usage(table_name))
-        table_map[table_name]["write_by_count"] = procedure_count
-        table_map[table_name]["write_edge_count"] = edge_count
+        key = _canonical_table_key(table_name)
+        item = table_map.setdefault(key, _empty_table_usage(table_name))
+        _merge_table_usage(item, table_name, procedure_names, edge_count, "write")
 
     rows = list(table_map.values())
     for item in rows:
+        item["read_by_count"] = len(item.pop("_read_procedure_names"))
+        item["write_by_count"] = len(item.pop("_write_procedure_names"))
         item["edge_count"] = item["read_edge_count"] + item["write_edge_count"]
+        item.pop("_display_weight")
     rows.sort(key=lambda item: (item["read_by_count"] + item["write_by_count"], item["edge_count"]), reverse=True)
     return rows[:limit]
 
@@ -434,7 +439,7 @@ def _build_edge(edge: ProcedureLineageEdge) -> dict:
     }
 
 
-def _table_usage_rows(db: Session, relation_type: str, keyword: str | None = None) -> list[tuple[str, int, int]]:
+def _table_usage_rows(db: Session, relation_type: str, keyword: str | None = None) -> list[tuple[str, set[str], int]]:
     object_column = (
         ProcedureLineageEdge.source_object if relation_type == "READ" else ProcedureLineageEdge.target_object
     )
@@ -442,15 +447,15 @@ def _table_usage_rows(db: Session, relation_type: str, keyword: str | None = Non
     query = (
         db.query(
             object_column.label("table_name"),
-            func.count(func.distinct(ProcedureLineageEdge.procedure_name)).label("procedure_count"),
+            ProcedureLineageEdge.procedure_name.label("procedure_name"),
             func.count(ProcedureLineageEdge.id).label("edge_count"),
         )
         .filter(ProcedureLineageEdge.relation_type == relation_type, kind_column == "table")
-        .group_by(object_column)
+        .group_by(object_column, ProcedureLineageEdge.procedure_name)
     )
     if keyword and keyword.strip():
         query = query.filter(object_column.ilike(f"%{keyword.strip()}%"))
-    return [(row.table_name, row.procedure_count or 0, row.edge_count or 0) for row in query.all()]
+    return [(row.table_name, {row.procedure_name}, row.edge_count or 0) for row in query.all()]
 
 
 def _empty_table_usage(table_name: str) -> dict:
@@ -461,12 +466,45 @@ def _empty_table_usage(table_name: str) -> dict:
         "read_edge_count": 0,
         "write_edge_count": 0,
         "edge_count": 0,
+        "_read_procedure_names": set(),
+        "_write_procedure_names": set(),
+        "_display_weight": (0, 0, 0),
     }
+
+
+def _merge_table_usage(
+    item: dict,
+    table_name: str,
+    procedure_names: set[str],
+    edge_count: int,
+    direction: str,
+) -> None:
+    if direction == "read":
+        item["_read_procedure_names"].update(procedure_names)
+        item["read_edge_count"] += edge_count
+    else:
+        item["_write_procedure_names"].update(procedure_names)
+        item["write_edge_count"] += edge_count
+
+    display_weight = _table_display_weight(table_name, edge_count)
+    if display_weight > item["_display_weight"]:
+        item["table_name"] = table_name
+        item["_display_weight"] = display_weight
+
+
+def _table_display_weight(table_name: str, edge_count: int) -> tuple[int, int, int]:
+    parts = [part for part in table_name.split(".") if part]
+    uppercase_score = sum(1 for char in table_name if char.isupper())
+    return (edge_count, len(parts), uppercase_score)
 
 
 def _table_match_filter(column, table_name: str):
     normalized = table_name.strip().lower()
     return or_(func.lower(column) == normalized, func.lower(column).like(f"%.{normalized}"))
+
+
+def _canonical_table_key(table_name: str) -> str:
+    return table_name.strip().lower()
 
 
 def _first_table_name(*edge_groups: list[ProcedureLineageEdge]) -> str | None:
