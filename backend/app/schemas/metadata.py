@@ -81,3 +81,55 @@ class MetadataTableDetail(BaseModel):
 
 class MetadataGraph(BaseModel):
     tree: dict
+
+
+class MetadataQualityIssueStat(BaseModel):
+    issue_code: str
+    issue_name: str
+    count: int
+
+
+class MetadataQualityDomainStat(BaseModel):
+    business_domain: str
+    table_count: int
+    valid_table_count: int
+    avg_quality_score: float
+    unclassified: bool
+
+
+class MetadataQualityTableItem(BaseModel):
+    id: int
+    table_name: str
+    table_comment: str | None = None
+    business_domain: str | None = None
+    is_valid: bool
+    column_count: int
+    primary_key_count: int
+    missing_column_comment_count: int
+    missing_business_desc_count: int
+    unknown_nullable_count: int
+    lineage_ref_count: int
+    quality_score: int
+    issue_tags: list[str]
+
+
+class MetadataQualitySummary(BaseModel):
+    total_tables: int
+    valid_tables: int
+    offline_tables: int
+    unclassified_tables: int
+    tables_missing_comment: int
+    tables_without_columns: int
+    tables_without_primary_key: int
+    total_columns: int
+    columns_missing_comment: int
+    columns_missing_business_desc: int
+    columns_unknown_nullable: int
+    columns_missing_ordinal_position: int
+    columns_type_anomaly: int
+    table_comment_coverage: float
+    column_comment_coverage: float
+    primary_key_coverage: float
+    issue_stats: list[MetadataQualityIssueStat]
+    domain_quality: list[MetadataQualityDomainStat]
+    top_issue_tables: list[MetadataQualityTableItem]

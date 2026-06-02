@@ -2,6 +2,7 @@ import request from "./request";
 import type { ApiResponse } from "../types/sql";
 import type {
   MetadataGraph,
+  MetadataQualitySummary,
   MetadataSummary,
   MetadataTableDetail,
   MetadataTableList,
@@ -22,4 +23,8 @@ export function getMetadataTableDetail(tableId: number) {
 
 export function getMetadataGraph() {
   return request.get<ApiResponse<MetadataGraph>>("/api/metadata/graph").then((res) => res.data.data);
+}
+
+export function getMetadataQuality() {
+  return request.get<ApiResponse<MetadataQualitySummary>>("/api/metadata/quality").then((res) => res.data.data);
 }

@@ -5,6 +5,7 @@ from app.core.database import get_db
 from app.schemas.sql_analysis import ApiResponse
 from app.services.metadata_service import (
     get_metadata_graph,
+    get_metadata_quality,
     get_metadata_summary,
     get_metadata_table_detail,
     list_metadata_tables,
@@ -45,3 +46,8 @@ def metadata_table_detail(table_id: int, db: Session = Depends(get_db)) -> ApiRe
 @router.get("/graph", response_model=ApiResponse)
 def metadata_graph(db: Session = Depends(get_db)) -> ApiResponse:
     return ApiResponse(data=get_metadata_graph(db))
+
+
+@router.get("/quality", response_model=ApiResponse)
+def metadata_quality(db: Session = Depends(get_db)) -> ApiResponse:
+    return ApiResponse(data=get_metadata_quality(db))

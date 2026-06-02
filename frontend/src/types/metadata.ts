@@ -88,6 +88,58 @@ export interface MetadataGraph {
   tree: MetadataGraphNode;
 }
 
+export interface MetadataQualityIssueStat {
+  issue_code: string;
+  issue_name: string;
+  count: number;
+}
+
+export interface MetadataQualityDomainStat {
+  business_domain: string;
+  table_count: number;
+  valid_table_count: number;
+  avg_quality_score: number;
+  unclassified: boolean;
+}
+
+export interface MetadataQualityTableItem {
+  id: number;
+  table_name: string;
+  table_comment?: string;
+  business_domain?: string;
+  is_valid: boolean;
+  column_count: number;
+  primary_key_count: number;
+  missing_column_comment_count: number;
+  missing_business_desc_count: number;
+  unknown_nullable_count: number;
+  lineage_ref_count: number;
+  quality_score: number;
+  issue_tags: string[];
+}
+
+export interface MetadataQualitySummary {
+  total_tables: number;
+  valid_tables: number;
+  offline_tables: number;
+  unclassified_tables: number;
+  tables_missing_comment: number;
+  tables_without_columns: number;
+  tables_without_primary_key: number;
+  total_columns: number;
+  columns_missing_comment: number;
+  columns_missing_business_desc: number;
+  columns_unknown_nullable: number;
+  columns_missing_ordinal_position: number;
+  columns_type_anomaly: number;
+  table_comment_coverage: number;
+  column_comment_coverage: number;
+  primary_key_coverage: number;
+  issue_stats: MetadataQualityIssueStat[];
+  domain_quality: MetadataQualityDomainStat[];
+  top_issue_tables: MetadataQualityTableItem[];
+}
+
 export interface MetadataTableQuery {
   keyword?: string;
   business_domain?: string;

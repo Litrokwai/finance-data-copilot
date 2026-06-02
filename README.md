@@ -16,6 +16,7 @@ Finance Data Copilot，中文名“金融数据 AI 开发助手”，是一个�
 - SQL 分析历史：保存分析记录，支持前端列表和详情查看。
 - Dashboard：展示分析总量、风险分布和最近趋势。
 - 元数据全景：基于 PostgreSQL 中已同步的好股库元数据，展示表、字段、业务域、下线状态、敏感字段和业务域资产矩阵。
+- 元数据质量：统计待治理分类、缺主键、字段中文名覆盖率、字段备注覆盖率、业务域质量和优先治理表。
 - 存储过程血缘：基于链接服务器只读获取的存储过程定义，解析过程与表之间的读取、写入和临时表关系。
 - 血缘复核工作台：聚合动态 SQL 过程和低置信度读写边，支持确认、标记需修正、忽略和备注。
 - 数据库初始化：提供 schema.sql、seed.sql 和 Alembic 初始迁移。
@@ -77,6 +78,7 @@ npm run dev
 
 - `/dashboard`：SQL 分析统计 Dashboard
 - `/metadata`：元数据全景
+- `/metadata-quality`：元数据质量
 - `/procedure-lineage`：存储过程血缘
 - `/lineage-review`：血缘复核工作台
 - `/sql-analyze`：SQL 解释
@@ -148,6 +150,10 @@ $env:DATA_DICT_COOKIE="你的浏览器 Cookie"
 - 表详情：查看中文名称、字段序号、字段中文名、是否为空、主键、敏感字段标记、下线状态和关联指标。字段列表按源端 `ordinal_position` 排序；字段备注通过字段中文名旁的信息提示展示，不单独占用一列。
 
 敏感字段当前由源端 `catalog_columns.pii_level` 映射到 `metadata_column.is_sensitive`。只要 `pii_level` 有有效分级且不是 `none`、`no`、`0`、`无`、`非敏感` 或 `public`，就会标记为敏感字段。现阶段不扫描字段内容，也不读取真实业务明细数据。
+
+## 元数据质量
+
+元数据质量页面读取本地 PostgreSQL 中的 `metadata_table`、`metadata_column` 和 `procedure_lineage_edge`，用于识别后续 AI 问答和血缘分析前需要优先治理的表和字段。当前不会修改源端分类，也不会覆盖 `metadata_table.business_domain`；空业务域、`未分类` 和 `好股库未分类` 会统一作为“待治理分类”参与统计。页面展示可用表、待治理分类、缺主键可用表、字段中文名覆盖率、表中文名覆盖率、业务域质量和优先治理表。
 
 ## 存储过程血缘
 

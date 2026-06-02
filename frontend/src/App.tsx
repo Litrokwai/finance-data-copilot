@@ -1,4 +1,13 @@
-import { AuditOutlined, BranchesOutlined, DashboardOutlined, DatabaseOutlined, HistoryOutlined, SafetyCertificateOutlined, TableOutlined } from "@ant-design/icons";
+import {
+  AuditOutlined,
+  BranchesOutlined,
+  DashboardOutlined,
+  DatabaseOutlined,
+  HistoryOutlined,
+  SafetyCertificateOutlined,
+  TableOutlined,
+  WarningOutlined
+} from "@ant-design/icons";
 import { Layout, Menu, Typography } from "antd";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 
@@ -7,6 +16,7 @@ const { Header, Sider, Content } = Layout;
 const items = [
   { key: "/dashboard", icon: <DashboardOutlined />, label: "Dashboard" },
   { key: "/metadata", icon: <TableOutlined />, label: "元数据全景" },
+  { key: "/metadata-quality", icon: <WarningOutlined />, label: "元数据质量" },
   { key: "/procedure-lineage", icon: <BranchesOutlined />, label: "存储过程血缘" },
   { key: "/lineage-review", icon: <AuditOutlined />, label: "血缘复核" },
   { key: "/sql-analyze", icon: <DatabaseOutlined />, label: "SQL 解释" },
